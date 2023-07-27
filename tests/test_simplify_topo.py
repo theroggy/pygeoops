@@ -1,3 +1,4 @@
+import warnings
 import geopandas as gpd
 import numpy as np
 import pytest
@@ -55,6 +56,35 @@ def test_simplify_topo_ducktype_GeoSeries():
     # Due to the ~ common boundary between poly1 and poly2, a point (10, 0) is added
     # to poly2. Simplification removes (11,0), so poly2 ends up the same as poly1.
     assert result[0] == result[2]
+
+
+def test_simplify_topo_warning_on_cast():
+    """
+    Test handling of following warning in simplify_topo:
+        topojson/core/dedup.py:107:
+        RuntimeWarning: invalid value encountered in cast
+        data["bookkeeping_shared_arcs"] = array_bk_sarcs.astype(np.int64).tolist()
+    """
+    # Prepare test data
+    poly1 = shapely.Polygon([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)])
+    poly2 = shapely.Polygon([(10, 0), (20, 0), (20, 10), (10, 10), (10, 0)])
+    poly3 = shapely.Polygon([(20, 0), (30, 0), (30, 10), (20, 10), (20, 0)])
+    input = [poly1, poly2, poly3]
+
+    # Test
+    with warnings.catch_warnings():
+        message = "invalid value encountered in cast.*"
+        warnings.filterwarnings(
+            action="error", category=RuntimeWarning, message=message
+        )
+        result = simplify_topo.simplify_topo(input, tolerance=1, algorithm="lang")
+
+    # Check result
+    assert result is not None
+    assert isinstance(result, np.ndarray)
+    assert len(result) == len(input)
+    assert result[0].normalize() == input[0].normalize()
+    assert result[1].normalize() == input[1].normalize()
 
 
 def test_simplify_topo_ducktype_ndarray():
@@ -168,3 +198,43 @@ def test_simplify_topo_result_mixed(tmp_path):
             )
         elif idx == 1:
             assert geom_result is None
+
+
+def test_simplify_topo_result_GeometryCollection(tmp_path):
+    """
+    Test with Polygons as input where an island in a polygon collapses to a lines
+    because of the simplification, resulting in a GeometryCollection.
+    In this case the line is removed from the GeometryCollection so the output only
+    contains Polygons.
+    This tests a specific case because GeometryCollection doesn't have a primitive type.
+    """
+    # Prepare test data
+    # Polygon with a narrow triangle as a hole
+    poly_narrow_hole = shapely.Polygon(
+        shell=[(10, 10), (0, 10), (0, 0), (10, 0), (10, 10)],
+        holes=[[(5, 5), (1, 5), (1, 4), (5, 5)]],
+    )
+    # Standard polygon
+    poly = shapely.Polygon([(30, 10), (20, 10), (20, 0), (30, 0), (30, 10)])
+    input = [poly_narrow_hole, poly]
+    output_path = tmp_path / f"{__name__}_input.png"
+    test_helper.plot([poly_narrow_hole, poly], output_path)
+
+    # Test
+    result = simplify_topo.simplify_topo(input, tolerance=1, algorithm="lang")
+
+    output_path = tmp_path / f"{__name__}_result.png"
+    test_helper.plot(result, output_path)
+
+    # Check result
+    assert result is not None
+    assert isinstance(result, np.ndarray)
+    assert len(result) == len(input)
+    for idx, geom_result in enumerate(result):
+        if idx == 0:
+            assert (
+                geom_result.normalize()
+                == shapely.Polygon(poly_narrow_hole.exterior).normalize()
+            )
+        elif idx == 1:
+            assert geom_result.normalize() == poly.normalize()

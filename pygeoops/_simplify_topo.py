@@ -5,6 +5,7 @@ Module containing utilities regarding operations on geoseries.
 
 import logging
 from typing import Optional, Union
+import warnings
 
 from geopandas import GeoSeries
 import numpy as np
@@ -74,7 +75,12 @@ def simplify_topo(
     if not isinstance(geometry, (GeoSeries, list)):
         geometries = geometry.tolist()
 
-    topo = topojson.Topology(data=geometries, prequantize=False)
+    with warnings.catch_warnings():
+        message = "invalid value encountered in cast.*"
+        warnings.filterwarnings(
+            action="ignore", category=RuntimeWarning, message=message
+        )
+        topo = topojson.Topology(data=geometries, prequantize=False)
 
     # Simplify all arcs/vectors/boundaries of the topologies
     # ------------------------------------------------------
@@ -90,7 +96,7 @@ def simplify_topo(
     assert topolines_simpl is not None
 
     # Copy the results of the simplified lines back to the topology arcs
-    if algorithm == "lang":
+    if algorithm in ["lang", "lang+"]:
         # For LANG, a simple copy is OK
         assert isinstance(topolines_simpl, shapely.MultiLineString)
         topo.output["arcs"] = [list(geom.coords) for geom in topolines_simpl.geoms]
@@ -134,18 +140,10 @@ def simplify_topo(
         primitive_types_orig = None
 
     if primitive_types_orig is not None and len(primitive_types_orig) == 1:
-        # If output contains different types, extract only the desired type.
-        geometry_types_simpl = topo_simpl_gdf.geometry.geom_type.unique()
-        primitive_types_simpl = list(
-            {GeometryType(type).to_primitivetype.name for type in geometry_types_simpl}
+        # Extract only the desired type from simplified output
+        topo_simpl_gdf.geometry = pygeoops.collection_extract(
+            topo_simpl_gdf.geometry, PrimitiveType(primitive_types_orig[0])
         )
-        if (
-            len(primitive_types_simpl) > 1
-            or primitive_types_orig[0] != primitive_types_simpl[0]
-        ):
-            topo_simpl_gdf.geometry = pygeoops.collection_extract(
-                topo_simpl_gdf.geometry.array, PrimitiveType(primitive_types_orig[0])
-            )
 
     # Return result in the appropriate type
     # -------------------------------------
