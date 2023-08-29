@@ -30,6 +30,60 @@ def _get_version() -> str:
     return pygeoops.__version__
 
 
+def difference_collection(tmp_dir: Path) -> RunResult:
+    # Init
+    function_name = inspect.currentframe().f_code.co_name  # type: ignore[union-attr]
+
+    # Prepare some complex polygons to test with
+    poly_complex1 = testdata.create_complex_poly(
+        xmin=0.123,
+        ymin=0.123,
+        width=20000,
+        height=20000,
+        line_distance=500,
+        max_segment_length=100,
+    )
+    print(f"num_coordinates: {shapely.get_num_coordinates(poly_complex1)}")
+    poly_complex_list = []
+    for offset in range(0, 000, 10):
+        poly_complex_list.append(
+            testdata.create_complex_poly(
+                xmin=100 + offset,
+                ymin=100 + offset,
+                width=1000,
+                height=1000,
+                line_distance=500,
+                max_segment_length=500,
+            )
+        )
+    print(
+        f"nb in complex list: {len(poly_complex_list)}, each "
+        f"{shapely.get_num_coordinates(poly_complex_list[0])} points"
+    )
+
+    # Go!
+    start_time = datetime.now()
+
+    poly_complex_collection = shapely.GeometryCollection(poly_complex_list)
+    result = pygeoops.difference_all_tiled(poly_complex1, poly_complex_collection)
+
+    operation_descr = (
+        f"{function_name} with {shapely.get_num_coordinates(poly_complex1)} and "
+        f"{shapely.get_num_coordinates(poly_complex1)} points gave area {result.area}"
+    )
+    result = RunResult(
+        package=_get_package(),
+        package_version=_get_version(),
+        operation=function_name,
+        secs_taken=(datetime.now() - start_time).total_seconds(),
+        operation_descr=operation_descr,
+        run_details=None,
+    )
+
+    # Cleanup and return
+    return result
+
+
 def simplify_lang(tmp_dir: Path) -> RunResult:
     # Init
     function_name = inspect.currentframe().f_code.co_name  # type: ignore[union-attr]

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Module to prepare test data for benchmarking geo operations.
 """
@@ -10,20 +9,13 @@ import pprint
 import shutil
 import tempfile
 from typing import Optional
+
+import geofileops as gfo
+import shapely
 import urllib.request
 import zipfile
 
-import geofileops as gfo
-
-################################################################################
-# Some inits
-################################################################################
-
 logger = logging.getLogger(__name__)
-
-################################################################################
-# The real work
-################################################################################
 
 
 class TestFile(enum.Enum):
@@ -58,6 +50,85 @@ class TestFile(enum.Enum):
         )
 
         return testfile_path
+
+
+class TestData:
+    @staticmethod
+    def get_complex_poly():
+        poly_complex1 = create_complex_poly(
+            xmin=0.123,
+            ymin=0.123,
+            width=50000,
+            height=1000,
+            line_distance=100,
+            max_segment_length=50,
+        )
+        complex_poly_descr = (
+            f"complex poly with: {shapely.get_num_coordinates(poly_complex1)} points"
+        )
+        return (poly_complex1, complex_poly_descr)
+
+    @staticmethod
+    def get_complex_poly_collection():
+        poly_complex_list = []
+        for offset in range(-10000, 60000, 50):
+            poly_complex_list.append(
+                create_complex_poly(
+                    xmin=100 + offset,
+                    ymin=100,
+                    width=50,
+                    height=50,
+                    line_distance=10,
+                    max_segment_length=25,
+                )
+            )
+        complex_collection_descr = (
+            f"complex collection of {len(poly_complex_list)} polygons, each "
+            f"{shapely.get_num_coordinates(poly_complex_list[0])} points"
+        )
+        poly_complex_collection = shapely.GeometryCollection(poly_complex_list)
+        return (poly_complex_collection, complex_collection_descr)
+
+
+def create_complex_poly(
+    xmin: float,
+    ymin: float,
+    width: int,
+    height: int,
+    line_distance: int,
+    max_segment_length: int,
+) -> shapely.Polygon:
+    """Create complex polygon of a ~grid-shape the size specified."""
+    lines = []
+
+    # Vertical lines
+    for x_offset in range(0, 0 + width, line_distance):
+        lines.append(
+            shapely.LineString(
+                [(xmin + x_offset, ymin), (xmin + x_offset, ymin + height)]
+            )
+        )
+
+    # Horizontal lines
+    for y_offset in range(0, 0 + height, line_distance):
+        lines.append(
+            shapely.LineString(
+                [(xmin, ymin + y_offset), (xmin + width, ymin + y_offset)]
+            )
+        )
+
+    poly_complex = shapely.unary_union(shapely.MultiLineString(lines).buffer(2))
+    poly_complex = shapely.segmentize(
+        poly_complex, max_segment_length=max_segment_length
+    )
+    assert len(shapely.get_parts(poly_complex)) == 1
+
+    # Make sure the result is not larger than the width and height specified
+    poly_complex = shapely.intersection(
+        poly_complex, shapely.box(xmin, ymin, xmin + width, ymin + height)
+    )
+
+    return poly_complex
 
 
 def download_samplefile(
