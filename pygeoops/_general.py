@@ -13,9 +13,7 @@ import pygeoops
 from pygeoops._types import GeometryType, PrimitiveType
 
 
-def collect(
-    geometries, force_geometrycollection: bool = False
-) -> Optional[BaseGeometry]:
+def collect(geometries) -> Optional[BaseGeometry]:
     """
     Collects a list of geometries to one (multi)geometry.
 
@@ -58,28 +56,25 @@ def collect(
 
     # Loop over all elements in the list, and determine the appropriate geometry
     # type to create
-    if force_geometrycollection:
-        result_collection_type = GeometryType.GEOMETRYCOLLECTION
-    else:
-        result_collection_type = None
-        for geom in geometries:
-            if isinstance(geom, BaseMultipartGeometry):
-                # If geom is a multitype, the result needs to be a GeometryCollection,
-                # as this is the only type that can contain Multi-types.
-                result_collection_type = GeometryType.GEOMETRYCOLLECTION
-                break
+    result_collection_type = None
+    for geom in geometries:
+        if isinstance(geom, BaseMultipartGeometry):
+            # If geom is a multitype, the result needs to be a GeometryCollection,
+            # as this is the only type that can contain Multi-types.
+            result_collection_type = GeometryType.GEOMETRYCOLLECTION
+            break
 
-            geometrytype = GeometryType(geom.geom_type)
-            if result_collection_type is None:
-                # First element
-                result_collection_type = geometrytype.to_multitype
-            elif geometrytype.to_multitype == result_collection_type:
-                # Same as the previous types encountered, so continue checking
-                continue
-            else:
-                # Another type than current result_collection_type -> GeometryCollection
-                result_collection_type = GeometryType.GEOMETRYCOLLECTION
-                break
+        geometrytype = GeometryType(geom.geom_type)
+        if result_collection_type is None:
+            # First element
+            result_collection_type = geometrytype.to_multitype
+        elif geometrytype.to_multitype == result_collection_type:
+            # Same as the previous types encountered, so continue checking
+            continue
+        else:
+            # Another type than current result_collection_type -> GeometryCollection
+            result_collection_type = GeometryType.GEOMETRYCOLLECTION
+            break
 
     # Now we can create the collection
     if result_collection_type == GeometryType.MULTIPOINT:
@@ -87,7 +82,12 @@ def collect(
     elif result_collection_type == GeometryType.MULTILINESTRING:
         return shapely.MultiLineString(geometries)
     elif result_collection_type == GeometryType.MULTIPOLYGON:
-        return shapely.MultiPolygon(geometries)
+        # A multipolygon with touching rings is not valid, so try to create it like
+        # this, and if it is invalid, create a GeometryCollection
+        result = shapely.MultiPolygon(geometries)
+        result = result if result.is_valid else shapely.GeometryCollection(geometries)
+        return result
+
     elif result_collection_type == GeometryType.GEOMETRYCOLLECTION:
         return shapely.GeometryCollection(geometries)
     else:
@@ -363,7 +363,10 @@ def make_valid(geometry, keep_collapsed: bool = True, only_if_invalid: bool = Fa
             result = _extract_0dim_ndarray(result)
         else:
             # No make_valid needed, but copy because we're supposed to return a copy
-            result = copy.deepcopy(geometry)
+            if not hasattr(geometry, "__len__"):
+                result = copy.deepcopy(geometry)
+            else:
+                result = np.array(geometry)
 
     else:
         result = _make_valid(geometry, keep_collapsed)
