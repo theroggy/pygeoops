@@ -25,9 +25,7 @@ def collect(geometries) -> Optional[BaseGeometry]:
         GeometryCollection.
 
     Args:
-        geometry (geometry, GeoSeries or arraylike): geometry or arraylike.
-        force_geometrycollection (bool, optional): True to force the output to be a
-            geometrycollection. Defaults to False.
+        geometries (geometry, GeoSeries or arraylike): geometry or arraylike.
 
     Raises:
         ValueError: raises an exception if one of the input geometries is of an
@@ -107,8 +105,7 @@ def collection_extract(
     primitivetype: Union[int, PrimitiveType, ArrayLike, None] = None,
 ) -> Union[BaseGeometry, NDArray[BaseGeometry], None]:
     """
-    Extracts the parts from the input geometry/geometries that comply with the
-    geom type specified and returns them as (Multi)geometry.
+    Extracts the parts from the input that comply with the type specified.
 
     Args:
         geometry (geometry, GeoSeries or arraylike): geometry or arraylike.
