@@ -172,7 +172,7 @@ def collection_extract(
         result = np.array(
             [
                 _collection_extract(geometry=geom, primitivetype_id=type)
-                for geom, type in zip(geometry, primitivetype)  # type: ignore[arg-type]
+                for geom, type in zip(geometry, primitivetype, strict=True)  # type: ignore[arg-type]
             ]
         )
         # If input is GeoSeries, recover index
@@ -342,6 +342,8 @@ def get_parts_recursive(geometry: BaseGeometry | None):
 
     Even if there is deep nesting of multipart geometries, all parts are extracted to
     one flat array.
+
+    .. versionadded:: 0.6.0
 
     Args:
         geometry (BaseGeometry, optional): geometry to get the parts for.
