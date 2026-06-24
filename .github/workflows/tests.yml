@@ -54,7 +54,7 @@ jobs:
             python: "3.12"
             
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Conda environment with Micromamba
         uses: mamba-org/setup-micromamba@v3
@@ -69,5 +69,5 @@ jobs:
         run: |
           pytest --color=yes --cov=pygeoops --cov-append --cov-report term-missing --cov-report xml tests/
 
-      - uses: codecov/codecov-action@v6
+      - uses: codecov/codecov-action@v7
       
